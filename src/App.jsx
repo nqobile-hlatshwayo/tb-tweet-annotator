@@ -213,14 +213,15 @@ export default function App() {
           Asidlali la mfowethu.
         </p>
         <p className="text-slate-500 text-xs mt-6">
-          If you think you genuinely belong here, let Grand Master Popo will know.
+          NOTE: This sacred archive remains closed to wandering souls. Should your purpose prove sincere, Grand Master Popo may grant audience. Good luck.
         </p>
         
+        <br></br>
         <a
           href="mailto:popovich.thelord@gmail.com"
-          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-sm font-mono border border-slate-700 transition-colors"
+          className="px-6 py-2 bg-slate-800 text-slate-300 rounded hover:bg-slate-700 transition-colors border border-slate-700"
         >
-          Transmit Appeaal
+          Present Your Plea
         </a>
 
         <br></br>
