@@ -66,11 +66,15 @@ export default function App() {
   // ── 2. When auth resolves, assign annotator role ──────────────────────────
   // You (Annotator A) are identified by your email.
   // Anyone else who signs in is automatically Annotator B.
-  const YOUR_EMAIL = "nqobiletheconquerer@gmail.com"; // 
-  
+  const ANNOTATOR_EMAILS = {
+    "nqobiletheconquerer@gmail.com": "A",
+    "lesomokagiso5@gmail.com":         "B",   
+  };
+
   useEffect(() => {
     if (!authUser) { setAnnotatorId(null); return; }
-    setAnnotatorId(authUser.email === YOUR_EMAIL ? 'A' : 'B');
+    // Known emails → their role; anyone else → C
+    setAnnotatorId(ANNOTATOR_EMAILS[authUser.email] ?? "C");
   }, [authUser]);
 
   // ── 3. When role is known, load tweets + existing annotations ─────────────
