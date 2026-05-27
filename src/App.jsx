@@ -18,13 +18,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Download, CheckCircle2, XCircle, MapPin, Clock, User,
-  Info, Globe, Flag, LogOut, Loader2
+  Info, Globe, Flag, LogOut, Loader2, BarChart3
 } from 'lucide-react';
-
+import Dashboard from './Dashboard';
 import { auth, provider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
-  collection, doc, getDocs,
+  collection, doc, getDocs, getDoc,
   setDoc, query, where, serverTimestamp
 } from 'firebase/firestore';
 
@@ -57,24 +57,45 @@ export default function App() {
   const [flash,        setFlash]        = useState(null);
   const [showGuidelines, setShowGuidelines] = useState(false);
 
+  const [showDashboard, setShowDashboard] = useState(false);
+
+  const [userRole, setUserRole] = useState(null);   // 'admin', 'annotator', or null (unauthorised)
+  const [accessDenied, setAccessDenied] = useState(false);
   // ── 1. Listen to Firebase Auth ─────────────────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, user => setAuthUser(user ?? null));
     return unsub;
   }, []);
 
-  // ── 2. When auth resolves, assign annotator role ──────────────────────────
-  // You (Annotator A) are identified by your email.
-  // Anyone else who signs in is automatically Annotator B.
-  const ANNOTATOR_EMAILS = {
-    "nqobiletheconquerer@gmail.com": "A",
-    "lesomokagiso5@gmail.com":         "B",   
-  };
-
+  // ── 2. When auth resolves, fetch dynamic role from Firestore ───────────────
   useEffect(() => {
-    if (!authUser) { setAnnotatorId(null); return; }
-    // Known emails → their role; anyone else → C
-    setAnnotatorId(ANNOTATOR_EMAILS[authUser.email] ?? "C");
+    async function fetchUserRole() {
+      if (!authUser) { 
+        setAnnotatorId(null); 
+        setUserRole(null);
+        setAccessDenied(false);
+        return; 
+      }
+
+      try {
+        const userDocRef = doc(db, 'users', authUser.email);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const data = userDocSnap.data();
+          setAnnotatorId(data.annotatorId);
+          setUserRole(data.role || 'annotator'); 
+          setAccessDenied(false);
+        } else {
+          console.warn(`Unauthorized access attempt by: ${authUser.email}`);
+          setAccessDenied(true); 
+        }
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+      }
+    }
+
+    fetchUserRole();
   }, [authUser]);
 
   // ── 3. When role is known, load tweets + existing annotations ─────────────
@@ -177,16 +198,56 @@ export default function App() {
 
   // ── Render guards ──────────────────────────────────────────────────────────
 
-  // Firebase still initialising
   if (authUser === undefined) return <Spinner label="Initialising…" />;
+  
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-center">
+        <XCircle size={48} className="text-red-500 mb-4" />
+        <h2 className="text-xl font-semibold text-slate-100 mb-2">Access Denied</h2>
+        <p className="text-slate-400 max-w-md mb-6">
+          This sovereign annotation chamber is reserved for certified TB discourse, AI and natural language specialists.
+        </p>
 
-  // Not signed in
+        <p className="text-slate-400 font-mono text-sm">
+          Asidlali la mfowethu.
+        </p>
+        <p className="text-slate-500 text-xs mt-6">
+          If you think you genuinely belong here, let Grand Master Popo will know.
+        </p>
+        
+        <a
+          href="mailto:popovich.thelord@gmail.com"
+          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-sm font-mono border border-slate-700 transition-colors"
+        >
+          Transmit Appeaal
+        </a>
+
+        <br></br>
+
+        <br></br>
+        <button 
+          onClick={() => {
+            setAccessDenied(false);
+            signOut(auth);
+          }} 
+          className="px-6 py-2 bg-slate-800 text-slate-300 rounded hover:bg-slate-700 transition-colors border border-slate-700"
+        >
+          Return to Sign In
+        </button>
+      </div>
+    );
+  }
+
   if (!authUser) return <SignInScreen />;
 
-  // Signed in, waiting for role lookup
-  if (!annotatorId) return <Spinner label="Checking access…" />;
+  // For annotators: wait until annotatorId is set (should be immediate after role)
+  if (!annotatorId) return <Spinner label="Loading your role…" />;
 
-  // Loading tweets
+  if (showDashboard) {
+    return <Dashboard onBack={() => setShowDashboard(false)} />;
+  }
+
   if (loading) return <Spinner label="Loading your annotation set…" />;
 
   // ── Main UI ────────────────────────────────────────────────────────────────
@@ -206,6 +267,15 @@ export default function App() {
 
           <div className="flex gap-3 items-center">
         
+          {userRole === 'admin' && (
+              <button
+                onClick={() => setShowDashboard(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 rounded-md text-sm font-medium transition-colors border border-emerald-800/50"
+              >
+                <BarChart3 size={16} /> Dashboard
+              </button>
+            )}
+
             {/* User avatar */}
             {authUser.photoURL ? (
               <img
