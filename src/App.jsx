@@ -54,6 +54,7 @@ export default function App() {
   // ── UI state ───────────────────────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState(0);
   const [filter,       setFilter]       = useState('Unannotated');
+  const [sortOrder,     setSortOrder]     = useState('default');
   const [flash,        setFlash]        = useState(null);
   const [showGuidelines, setShowGuidelines] = useState(false);
 
@@ -119,8 +120,12 @@ export default function App() {
         query(collection(db, 'annotations'), where('annotatorId', '==', annotatorId))
       );
       annSnap.forEach(d => {
-        const { tweetId, label } = d.data();
-        if (tweetMap[tweetId]) tweetMap[tweetId].label = label;
+        const { tweetId, label, updatedAt } = d.data();
+        if (tweetMap[tweetId]) {
+          tweetMap[tweetId].label = label;
+          // Convert Firestore timestamp to milliseconds for easy sorting
+          tweetMap[tweetId].updatedAt = updatedAt?.toMillis() || 0; 
+        }
       });
 
       const merged = Object.values(tweetMap);
@@ -143,9 +148,11 @@ export default function App() {
     setFlash(label);
     setSaving(true);
 
+    const now = Date.now(); // Capture current time for local sorting
+    
     // Optimistic local update
     const updatedTweets = tweets.map(t =>
-      t.id === currentTweet.id ? { ...t, label } : t
+      t.id === currentTweet.id ? { ...t, label, updatedAt: now } : t
     );
     setTweets(updatedTweets);
 
@@ -185,12 +192,26 @@ export default function App() {
     a.click();
   };
 
-  // ── Derived state ──────────────────────────────────────────────────────────
+// ── Derived state ──────────────────────────────────────────────────────────
   const filteredTweets = useMemo(() => {
-    if (filter === 'All')         return tweets;
-    if (filter === 'Unannotated') return tweets.filter(t => !t.label);
-    return tweets.filter(t => t.label === filter);
-  }, [tweets, filter]);
+    let result = tweets;
+    
+    // 1. Apply Filter
+    if (filter === 'Unannotated') {
+      result = tweets.filter(t => !t.label);
+    } else if (filter !== 'All') {
+      result = tweets.filter(t => t.label === filter);
+    }
+
+    // 2. Apply Sort
+    if (sortOrder === 'newest') {
+      result = [...result].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    } else if (sortOrder === 'oldest') {
+      result = [...result].sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+    }
+
+    return result;
+  }, [tweets, filter, sortOrder]);
 
   const currentTweet = filteredTweets[currentIndex] ?? null;
   const total        = tweets.length;
@@ -317,21 +338,38 @@ export default function App() {
           </div>
         </div>
 
-        {/* Filter Chips */}
-        <div className="max-w-3xl mx-auto mt-4 flex gap-2 overflow-x-auto pb-1">
-          {['Unannotated', 'All', 'Relevant', 'Irrelevant', 'Flagged'].map(f => (
-            <button
-              key={f}
-              onClick={() => { setFilter(f); setCurrentIndex(0); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                filter === f
-                  ? 'bg-slate-700 text-slate-100 ring-1 ring-slate-500'
-                  : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
-              }`}
+        {/* Filter & Sort Bar */}
+        <div className="max-w-3xl mx-auto mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 overflow-x-auto pb-1">
+          
+          {/* Filters */}
+          <div className="flex gap-2">
+            {['Unannotated', 'All', 'Relevant', 'Irrelevant', 'Flagged'].map(f => (
+              <button
+                key={f}
+                onClick={() => { setFilter(f); setCurrentIndex(0); }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                  filter === f
+                    ? 'bg-slate-700 text-slate-100 ring-1 ring-slate-500'
+                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
+          {/* Sorter */}
+          {filter !== 'Unannotated' && (
+            <select
+              value={sortOrder}
+              onChange={(e) => { setSortOrder(e.target.value); setCurrentIndex(0); }}
+              className="px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md focus:outline-none focus:border-emerald-500 transition-colors"
             >
-              {f}
-            </button>
-          ))}
+              <option value="default">Default Order</option>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
+          )}
         </div>
       </header>
 
