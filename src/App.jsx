@@ -21,6 +21,8 @@ import {
   Info, Globe, Flag, LogOut, Loader2, BarChart3
 } from 'lucide-react';
 import Dashboard from './Dashboard';
+import Adjudication from './Adjudication';
+import { fleissKappa, krippendorffAlpha } from './agreementMetrics';
 import { auth, provider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
@@ -59,6 +61,7 @@ export default function App() {
   const [showGuidelines, setShowGuidelines] = useState(false);
 
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showAdjudication, setShowAdjudication] = useState(false);
 
   const [userRole, setUserRole] = useState(null);   // 'admin', 'annotator', or null (unauthorised)
   const [accessDenied, setAccessDenied] = useState(false);
@@ -128,7 +131,11 @@ export default function App() {
         }
       });
 
-      const merged = Object.values(tweetMap);
+      // Sort tweets to start with the shared set first
+      const merged = Object.values(tweetMap).sort((a, b) => {
+        const rank = t => (t.bucket === 'Shared' ? 0 : 1);
+        return rank(a) - rank(b);
+      });
       setTweets(merged);
 
       // Jump to first unannotated
@@ -270,6 +277,10 @@ export default function App() {
     return <Dashboard onBack={() => setShowDashboard(false)} />;
   }
 
+  if (showAdjudication) {
+  return <Adjudication onBack={() => setShowAdjudication(false)} />;
+}
+
   if (loading) return <Spinner label="Loading your annotation set…" />;
 
   // ── Main UI ────────────────────────────────────────────────────────────────
@@ -290,12 +301,20 @@ export default function App() {
           <div className="flex gap-3 items-center">
         
           {userRole === 'admin' && (
-              <button
-                onClick={() => setShowDashboard(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 rounded-md text-sm font-medium transition-colors border border-emerald-800/50"
-              >
-                <BarChart3 size={16} /> Dashboard
-              </button>
+              <>
+                <button
+                  onClick={() => setShowDashboard(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 rounded-md text-sm font-medium transition-colors border border-emerald-800/50"
+                >
+                  <BarChart3 size={16} /> Dashboard
+                </button>
+                <button
+                  onClick={() => setShowAdjudication(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 rounded-md text-sm font-medium transition-colors border border-amber-800/50"
+                >
+                  <Flag size={16} /> Adjudication
+                </button>
+              </>
             )}
 
             {/* User avatar */}

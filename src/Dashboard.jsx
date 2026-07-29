@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { Loader2, BarChart3, User } from 'lucide-react';
+import { fleissKappa, krippendorffAlpha } from './agreementMetrics';
 
 // ─── Shared Helper ─────────────────────────────────────────────────────────────
 function cohenKappa(annsA, annsB) {
@@ -90,6 +91,25 @@ export default function Dashboard({ onBack }) {
   const stats = useMemo(() => {
     const activeAnnotators = Object.keys(users).sort();
     
+    // Build { tweetId: {Relevant: n, Irrelevant: n, Flagged: n} } for Fleiss,
+    // and { tweetId: ['Relevant','Irrelevant',...] } for Krippendorff —
+    // both restricted to shared-set tweets.
+    const sharedCounts = {};
+    const sharedArrays = {};
+    assignmentsMeta.sharedIds.forEach(tweetId => {
+      sharedCounts[tweetId] = { Relevant: 0, Irrelevant: 0, Flagged: 0 };
+      sharedArrays[tweetId] = [];
+    });
+    annotations.forEach(({ tweetId, label }) => {
+      if (sharedCounts[tweetId]) {
+        sharedCounts[tweetId][label] = (sharedCounts[tweetId][label] || 0) + 1;
+        sharedArrays[tweetId].push(label);
+      }
+    });
+
+    const overallFleiss = fleissKappa(sharedCounts);
+    const overallAlpha = krippendorffAlpha(sharedArrays);
+
     // Initialize tracking
     const byAnnotator = {};
     const labelCounts = {};
@@ -133,6 +153,8 @@ export default function Dashboard({ onBack }) {
       activeAnnotators,
       byAnnotator, 
       labelCounts,
+      overallFleiss, 
+      overallAlpha,
       kappa,
       totalLabels,
       prevalence: totalLabels > 0 ? totalRelevant / totalLabels : 0,
@@ -304,6 +326,19 @@ export default function Dashboard({ onBack }) {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="flex justify-between items-center bg-slate-900/60 p-4 rounded-lg border border-slate-700 mb-4">
+          <span className="text-slate-300 font-medium">Overall (Fleiss' κ)</span>
+          <span className="font-mono font-bold text-emerald-400">
+            {stats.overallFleiss !== null ? stats.overallFleiss.toFixed(2) : 'pending'}
+          </span>
+        </div>
+        <div className="flex justify-between items-center bg-slate-900/60 p-4 rounded-lg border border-slate-700 mb-4">
+          <span className="text-slate-300 font-medium">Overall (Krippendorff's α)</span>
+          <span className="font-mono font-bold text-emerald-400">
+            {stats.overallAlpha !== null ? stats.overallAlpha.toFixed(2) : 'pending'}
+          </span>
         </div>
 
       </div>
